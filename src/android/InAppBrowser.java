@@ -19,15 +19,12 @@
 package org.apache.cordova.inappbrowser;
 
 import android.annotation.SuppressLint;
-import org.apache.cordova.inappbrowser.InAppBrowserDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
-import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
 import android.util.TypedValue;
@@ -39,10 +36,15 @@ import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.webkit.CookieManager;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+
+import org.json.JSONArray;
+import org.xwalk.core.XWalkJavascriptResult;
+import org.xwalk.core.XWalkNavigationHistory;
+import org.xwalk.core.XWalkUIClient;
+import org.xwalk.core.XWalkView;
+import org.xwalk.core.XWalkResourceClient;
+import org.xwalk.core.internal.XWalkCookieManagerInternal;
+
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -52,7 +54,6 @@ import org.apache.cordova.CallbackContext;
 import org.apache.cordova.Config;
 import org.apache.cordova.CordovaArgs;
 import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.CordovaWebView;
 import org.apache.cordova.LOG;
 import org.apache.cordova.PluginManager;
 import org.apache.cordova.PluginResult;
@@ -71,7 +72,6 @@ public class InAppBrowser extends CordovaPlugin {
     protected static final String LOG_TAG = "InAppBrowser";
     private static final String SELF = "_self";
     private static final String SYSTEM = "_system";
-    // private static final String BLANK = "_blank";
     private static final String EXIT_EVENT = "exit";
     private static final String LOCATION = "location";
     private static final String HIDDEN = "hidden";
@@ -82,7 +82,7 @@ public class InAppBrowser extends CordovaPlugin {
     private static final String CLEAR_SESSION_CACHE = "clearsessioncache";
 
     private InAppBrowserDialog dialog;
-    private WebView inAppWebView;
+    private XWalkView inAppWebView;
     private EditText edittext;
     private CallbackContext callbackContext;
     private boolean showLocationBar = true;
@@ -95,7 +95,6 @@ public class InAppBrowser extends CordovaPlugin {
      *
      * @param action        The action to execute.
      * @param args          JSONArry of arguments for the plugin.
-     * @param callbackId    The callback id used when calling back into JavaScript.
      * @return              A PluginResult object with a status and message.
      */
     public boolean execute(String action, CordovaArgs args, final CallbackContext callbackContext) throws JSONException {
@@ -153,7 +152,7 @@ public class InAppBrowser extends CordovaPlugin {
                             webView.loadUrl(url);
                         }
                         //Load the dialer
-                        else if (url.startsWith(WebView.SCHEME_TEL))
+                        else if (url.startsWith("tel:"))
                         {
                             try {
                                 Log.d(LOG_TAG, "loading in dialer");
@@ -233,7 +232,7 @@ public class InAppBrowser extends CordovaPlugin {
             });
             PluginResult pluginResult = new PluginResult(PluginResult.Status.OK);
             pluginResult.setKeepCallback(true);
-            this.callbackContext.sendPluginResult(pluginResult);
+            callbackContext.sendPluginResult(pluginResult);
         }
         else if (action.equals("hide")) {
             this.cordova.getActivity().runOnUiThread(new Runnable() {
@@ -244,7 +243,7 @@ public class InAppBrowser extends CordovaPlugin {
             });
             PluginResult pluginResult = new PluginResult(PluginResult.Status.OK);
             pluginResult.setKeepCallback(true);
-            this.callbackContext.sendPluginResult(pluginResult);
+            callbackContext.sendPluginResult(pluginResult);
         }
         else {
             return false;
@@ -302,7 +301,7 @@ public class InAppBrowser extends CordovaPlugin {
             public void run() {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
                     // This action will have the side-effect of blurring the currently focused element
-                    inAppWebView.loadUrl("javascript:" + finalScriptToInject);
+                    inAppWebView.load("javascript:" + finalScriptToInject, null);
                 } else {
                     inAppWebView.evaluateJavascript(finalScriptToInject, null);
                 }
@@ -339,7 +338,6 @@ public class InAppBrowser extends CordovaPlugin {
      * Display a new browser with the specified URL.
      *
      * @param url           The url to load.
-     * @param usePhoneGap   Load url in PhoneGap webview
      * @return              "" if ok, or error message.
      */
     public String openExternal(String url) {
@@ -366,36 +364,33 @@ public class InAppBrowser extends CordovaPlugin {
      * Closes the dialog
      */
     public void closeDialog() {
-        final WebView childView = this.inAppWebView;
-        // The JS protects against multiple calls, so this should happen only when
-        // closeDialog() is called by other native code.
-        if (childView == null) {
-            return;
-        }
-        this.cordova.getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                childView.setWebViewClient(new WebViewClient() {
-                    // NB: wait for about:blank before dismissing
-                    public void onPageFinished(WebView view, String url) {
-                if (dialog != null) {
-                    dialog.dismiss();
-                }
+        if (this.inAppWebView != null) {
+        	
+//            this.cordova.getActivity().runOnUiThread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    childView.setWebViewClient(new WebViewClient() {
+//                        // NB: wait for about:blank before dismissing
+//                        public void onPageFinished(WebView view, String url) {
+//    		                if (dialog != null) {
+//    		                    dialog.dismiss();
+//    		                }
+//    		            }
+//    		        });
+//                    // NB: From SDK 19: "If you call methods on WebView from any thread 
+//                    // other than your app's UI thread, it can cause unexpected results."
+//                    // http://developer.android.com/guide/webapps/migrating.html#Threads
+//                    childView.loadUrl("about:blank");
+//                }
+//            });
+        	
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("type", EXIT_EVENT);
+                sendUpdate(obj, false);
+            } catch (JSONException ex) {
+                Log.d(LOG_TAG, "Should never happen");
             }
-        });
-                // NB: From SDK 19: "If you call methods on WebView from any thread 
-                // other than your app's UI thread, it can cause unexpected results."
-                // http://developer.android.com/guide/webapps/migrating.html#Threads
-                childView.loadUrl("about:blank");
-            }
-        });
-
-        try {
-            JSONObject obj = new JSONObject();
-            obj.put("type", EXIT_EVENT);
-            sendUpdate(obj, false);
-        } catch (JSONException ex) {
-            Log.d(LOG_TAG, "Should never happen");
         }
     }
 
@@ -403,8 +398,9 @@ public class InAppBrowser extends CordovaPlugin {
      * Checks to see if it is possible to go back one page in history, then does so.
      */
     private void goBack() {
-        if (this.inAppWebView.canGoBack()) {
-            this.inAppWebView.goBack();
+
+        if (this.inAppWebView.getNavigationHistory().canGoBack()) {
+            this.inAppWebView.getNavigationHistory().navigate(XWalkNavigationHistory.Direction.BACKWARD, 1);
         }
     }
 
@@ -412,8 +408,8 @@ public class InAppBrowser extends CordovaPlugin {
      * Checks to see if it is possible to go forward one page in history, then does so.
      */
     private void goForward() {
-        if (this.inAppWebView.canGoForward()) {
-            this.inAppWebView.goForward();
+        if (this.inAppWebView.getNavigationHistory().canGoForward()) {
+            this.inAppWebView.getNavigationHistory().navigate(XWalkNavigationHistory.Direction.FORWARD, 1);
         }
     }
 
@@ -427,9 +423,9 @@ public class InAppBrowser extends CordovaPlugin {
         imm.hideSoftInputFromWindow(edittext.getWindowToken(), 0);
 
         if (!url.startsWith("http") && !url.startsWith("file:")) {
-            this.inAppWebView.loadUrl("http://" + url);
+            this.inAppWebView.load("http://" + url,null);
         } else {
-            this.inAppWebView.loadUrl(url);
+            this.inAppWebView.load(url, null);
         }
         this.inAppWebView.requestFocus();
     }
@@ -452,7 +448,6 @@ public class InAppBrowser extends CordovaPlugin {
      * Display a new browser with the specified URL.
      *
      * @param url           The url to load.
-     * @param jsonObject
      */
     public String showWebPage(final String url, HashMap<String, Boolean> features) {
         // Determine if we should hide the location bar.
@@ -477,8 +472,6 @@ public class InAppBrowser extends CordovaPlugin {
                 }
             }
         }
-        
-        final CordovaWebView thatWebView = this.webView;
 
         // Create dialog in new thread
         Runnable runnable = new Runnable() {
@@ -619,37 +612,36 @@ public class InAppBrowser extends CordovaPlugin {
                 });
 
                 // WebView
-                inAppWebView = new WebView(cordova.getActivity());
+                inAppWebView = new XWalkView(cordova.getActivity());
                 inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-                inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView));
-                WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
-                inAppWebView.setWebViewClient(client);
-                WebSettings settings = inAppWebView.getSettings();
-                settings.setJavaScriptEnabled(true);
-                settings.setJavaScriptCanOpenWindowsAutomatically(true);
-                settings.setBuiltInZoomControls(true);
-                settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
+                inAppWebView.setUIClient( new InAppChromeClient(webView , inAppWebView) );
+                inAppWebView.setResourceClient(new InAppBrowserClient(inAppWebView, edittext));
 
+                //TODO:
                 //Toggle whether this is enabled or not!
-                Bundle appSettings = cordova.getActivity().getIntent().getExtras();
-                boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
-                if (enableDatabase) {
-                    String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
-                    settings.setDatabasePath(databasePath);
-                    settings.setDatabaseEnabled(true);
-                }
-                settings.setDomStorageEnabled(true);
+                //Bundle appSettings = cordova.getActivity().getIntent().getExtras();
+                //boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
+                //if (enableDatabase) {
+                //    String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
+                //    settings.setDatabasePath(databasePath);
+                //    settings.setDatabaseEnabled(true);
+                //}
+                //settings.setDomStorageEnabled(true);
+
+                XWalkCookieManagerInternal mCookieManager = new XWalkCookieManagerInternal();
+                mCookieManager.setAcceptCookie(true);
+                mCookieManager.setAcceptFileSchemeCookies(true);
 
                 if (clearAllCache) {
-                    CookieManager.getInstance().removeAllCookie();
+                    mCookieManager.removeAllCookie();
                 } else if (clearSessionCache) {
-                    CookieManager.getInstance().removeSessionCookie();
+                    mCookieManager.removeSessionCookie();
                 }
 
-                inAppWebView.loadUrl(url);
+                inAppWebView.load(url, null);
                 inAppWebView.setId(6);
-                inAppWebView.getSettings().setLoadWithOverviewMode(true);
-                inAppWebView.getSettings().setUseWideViewPort(true);
+                //TODO:inAppWebView.getSettings().setLoadWithOverviewMode(true);
+                //TODO:inAppWebView.getSettings().setUseWideViewPort(true);
                 inAppWebView.requestFocus();
                 inAppWebView.requestFocusFromTouch();
 
@@ -704,7 +696,7 @@ public class InAppBrowser extends CordovaPlugin {
      *
      * @param obj a JSONObject contain event payload information
      * @param status the status code to return to the JavaScript environment
-     */    
+     */
     private void sendUpdate(JSONObject obj, boolean keepCallback, PluginResult.Status status) {
         if (callbackContext != null) {
             PluginResult result = new PluginResult(status, obj);
@@ -715,21 +707,19 @@ public class InAppBrowser extends CordovaPlugin {
             }
         }
     }
-    
+
     /**
      * The webview client receives notifications about appView
      */
-    public class InAppBrowserClient extends WebViewClient {
-        EditText edittext;
-        CordovaWebView webView;
+    public class InAppBrowserClient extends XWalkResourceClient {
+        EditText  edittext;
+        XWalkView webView ;
 
         /**
          * Constructor.
-         *
-         * @param mContext
-         * @param edittext
          */
-        public InAppBrowserClient(CordovaWebView webView, EditText mEditText) {
+        public InAppBrowserClient(XWalkView webView, EditText mEditText) {
+            super(webView);
             this.webView = webView;
             this.edittext = mEditText;
         }
@@ -741,14 +731,14 @@ public class InAppBrowser extends CordovaPlugin {
          * @param url           The url of the page.
          */
         @Override
-        public void onPageStarted(WebView view, String url,  Bitmap favicon) {
-            super.onPageStarted(view, url, favicon);
+        public void onLoadStarted(XWalkView view, String url) {
+            super.onLoadStarted(view, url);
             String newloc = "";
             if (url.startsWith("http:") || url.startsWith("https:") || url.startsWith("file:")) {
                 newloc = url;
             } 
             // If dialing phone (tel:5551212)
-            else if (url.startsWith(WebView.SCHEME_TEL)) {
+            else if (url.startsWith("tel:")) {
                 try {
                     Intent intent = new Intent(Intent.ACTION_DIAL);
                     intent.setData(Uri.parse(url));
@@ -757,8 +747,7 @@ public class InAppBrowser extends CordovaPlugin {
                     LOG.e(LOG_TAG, "Error dialing " + url + ": " + e.toString());
                 }
             }
-
-            else if (url.startsWith("geo:") || url.startsWith(WebView.SCHEME_MAILTO) || url.startsWith("market:")) {
+            else if (url.startsWith("geo:") || url.startsWith("mailto:") || url.startsWith("market:")) {
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW);
                     intent.setData(Uri.parse(url));
@@ -817,9 +806,8 @@ public class InAppBrowser extends CordovaPlugin {
             }
         }
         
-        public void onPageFinished(WebView view, String url) {
-            super.onPageFinished(view, url);
-            
+        public void onLoadFinished(XWalkView view, String url) {
+            super.onLoadFinished(view, url);
             try {
                 JSONObject obj = new JSONObject();
                 obj.put("type", LOAD_STOP_EVENT);
@@ -831,9 +819,8 @@ public class InAppBrowser extends CordovaPlugin {
             }
         }
         
-        public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-            super.onReceivedError(view, errorCode, description, failingUrl);
-            
+        public void onReceivedLoadError(XWalkView view, int errorCode, String description, String failingUrl) {
+            super.onReceivedLoadError(view, errorCode, description, failingUrl);
             try {
                 JSONObject obj = new JSONObject();
                 obj.put("type", LOAD_ERROR_EVENT);
