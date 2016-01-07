@@ -24,7 +24,6 @@ import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.os.Build;
 import android.text.InputType;
 import android.util.Log;
 import android.util.TypedValue;
@@ -299,12 +298,7 @@ public class InAppBrowser extends CordovaPlugin {
             @SuppressLint("NewApi")
             @Override
             public void run() {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-                    // This action will have the side-effect of blurring the currently focused element
-                    inAppWebView.load("javascript:" + finalScriptToInject, null);
-                } else {
-                    inAppWebView.evaluateJavascript(finalScriptToInject, null);
-                }
+                inAppWebView.evaluateJavascript(finalScriptToInject, null);
             }
         });
     }
